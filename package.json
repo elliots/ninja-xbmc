@@ -1,0 +1,28 @@
+{
+  "name": "ninja-xbmc",
+  "version": "0.0.0",
+  "description": "Ninja Blocks module for interacting with XBMC",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:elliots/ninja-xbmc.git"
+  },
+  "keywords": [
+    "XBMC",
+    "Ninja",
+    "Blocks"
+  ],
+  "author": "Elliot Shepherd",
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "xbmc": "0.1.3",
+    "mdns":"git://github.com/agnat/node_mdns.git"
+  },
+  "config":{
+    "sockets":[]
+  }
+}

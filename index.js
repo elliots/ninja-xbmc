@@ -1,7 +1,11 @@
 var XbmcApi = require('xbmc'),
     util = require('util'),
     stream = require('stream'),
-    mdns = require('mdns');
+    mdns = require('mdns'),
+    http = require('http'),
+    https = require('https');
+
+// ES: This code is horrid. Please fix it.
 
 var log = console.log;
 
@@ -69,11 +73,14 @@ driver.prototype.scan = function () {
   browser.on('serviceUp', function(service) {
     console.log("MDNS: service up: ", service);
 
-    var device = new XBMCDevice(service.addresses[0], 9090, service.name);
-    self._devices.push(device);
+    var parentDevice = new XBMCDevice(service.addresses[0], 9090, service.name, self._app);
+    self._devices.push(parentDevice);
 
-    self.emit('register', device);
-
+    Object.keys(parentDevice.devices).forEach(function(id) {
+      console.log('Adding sub-device', id, parentDevice.devices[id].G);
+      self.emit('register', parentDevice.devices[id]);
+    });
+    
   });
   browser.on('serviceDown', function(service) {
     console.log("MDNS: service down: ", service);
@@ -85,14 +92,14 @@ driver.prototype.scan = function () {
 module.exports = driver;
 
 
-function XBMCDevice(host, port, name) {
-  this.readable = true;
-  this.writeable = true;
+function XBMCDevice(host, port, name, app) {
 
-  this.V = 0;
-  this.D = 14;
+  this.host = host;
+  this.port = port;
+  this.name = name;
+  this.app = app;
 
-  this.G = host + port; // Should use name, but not sure if spaces allowed?
+  console.log("GOT APP", app);
 
   this._connection = new XbmcApi.TCPConnection({
     host: host,
@@ -106,17 +113,17 @@ function XBMCDevice(host, port, name) {
 
   var self = this;
   this._xbmc.on('connection:open', function() {
-    self.emit('data', 1); // This is supposed to get the new device created in the system, but it seems
-                         // to be failing. So... yeah nothing happening.
-    self._xbmc.message('Online.', 'NinjaBlocks', 1000, 'http://www.sydneyangels.net.au/wp-content/uploads/2012/09/ninjablocks_logo.png');
-
+    self.devices.hid.emit('data', 'connected');
+    self.devices.camera.emit('data', 1);
+    self.devices.displayText.emit('data', 1);
+    //self._xbmc.message('Online.', 'NinjaBlocks', 1000);// 'http://www.sydneyangels.net.au/wp-content/uploads/2012/09/ninjablocks_logo.png');
   });
 
   'play,pause,add,update.clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated'
     .split(',').forEach(  function listenToNotification(name) {
       
       self._xbmc.on('notification:'+name, function(e) {
-        self.emit('data', name);
+        self.devices.hid.emit('data', name);
       });
     });
 
@@ -124,15 +131,121 @@ function XBMCDevice(host, port, name) {
     console.log('onData', e);
   });
 
+  function hid() {
+    this.readable = true;
+    this.writeable = false;
+    this.V = 0;
+    this.D = 14;
+    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+  }
+
+  util.inherits(hid, stream);
+
+  function displayText() {
+    this.readable = true;
+    this.writeable = true;
+    this.V = 0;
+    this.D = 240;
+    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+  }
+
+  util.inherits(displayText, stream);
+
+
+  displayText.prototype.write = function(data) {
+    console.log('XBMC - received text to display', data);
+    self._xbmc.message(data);
+    return true;
+  };
+
+  function camera() {
+    this.writeable = true;
+    this.readable = true;
+    this.V = 0;
+    this.D = 1004;
+    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this._guid = [self.app.id,this.G,this.V,this.D].join('_');
+
+    console.log("Camera guid", this._guid);
+    
+  }
+  
+  util.inherits(camera, stream);
+
+  camera.prototype.write = function(data) {
+
+    var postOptions = {
+      host:self.app.opts.streamHost,
+      port:self.app.opts.streamPort,
+      path:'/rest/v0/camera/'+this._guid+'/snapshot',
+      method:'POST'
+    };
+
+    var proto = (self.app.opts.streamPort==443) ? https:http;
+
+    console.log('Requesting current playing');
+    self._xbmc.media.api.send('Player.GetActivePlayers').then(function(data) {
+      if (data.result) {
+        self._xbmc.media.api.send('Player.GetItem', {
+          playerid: data.result[0].playerid,
+          properties: ['thumbnail']
+        }).then(function(data) {
+          var thumbnail = "http://" + self.host + '/image/' + encodeURIComponent(data.result.item.thumbnail);
+          
+          console.log(thumbnail);
+          var getReq = http.get(thumbnail,function(getRes) {
+
+            postOptions.headers = getRes.headers;
+            postOptions.headers['X-Ninja-Token'] = self.app.token;
+            console.log('token', self.app.token);
+
+            var postReq = proto.request(postOptions,function(postRes) {
+
+              postRes.on('end',function() {
+                console.log('Stream Server ended');
+              });
+              postRes.resume();
+            });
+
+            postReq.on('error',function(err) {
+              console.log('Error sending picture: ');
+              console.log(err);
+            });
+
+            var lenWrote=0;
+            getRes.on('data',function(data) {
+              postReq.write(data,'binary');
+              lenWrote+=data.length;
+            });
+
+            getRes.on('end',function() {
+              postReq.end();
+              console.log("Image sent %s",lenWrote);
+            });
+            getRes.resume();
+          });
+          getReq.on('error',function(error) {
+            console.log(error);
+          });
+          getReq.end();
+
+        });
+      } else {
+        console.log("Nothing is currently playing");
+      }
+    });
+    
+    return true;
+  };
+  
+  this.devices = {
+    hid: new hid(),
+    camera: new camera(),
+    displayText: new displayText()
+  };
 
 }
 
-
-XBMCDevice.prototype.write = function(data) {
-  console.log('XBMC - received data', data);
-  this._xbmc.message(data);
-  return true;
-};
 
 XBMCDevice.prototype.end = function() {};
 XBMCDevice.prototype.close = function() {};

@@ -12,10 +12,9 @@ var log = console.log;
 util.inherits(driver,stream);
 util.inherits(XBMCDevice,stream);
 
-log('XBMC - loading');
-
 
 function driver(opts, app) {
+
   this._app = app;
   this._opts = opts;
   this._opts.sockets = opts.sockets || [];
@@ -51,14 +50,14 @@ driver.prototype.config = function(rpc,cb) {
       });
       break;
     default:
-      console.log('Unknown rpc method', rpc.method, rpc);
+      log('Unknown rpc method', rpc.method, rpc);
   }
 };
  
 
 driver.prototype.rickRoll = function() {
   this._devices.forEach(function(device) {
-    console.log('rickrolling', device.G);
+    log('rickrolling', device.G);
     device._xbmc.player.openYoutube('y2Y7xqAlUHk');
   });
 };
@@ -66,24 +65,24 @@ driver.prototype.rickRoll = function() {
 
 driver.prototype.scan = function () {
 
-  console.log('MDNS: Scanning');
+  log('MDNS: Scanning');
   var self = this;
 
   var browser = new mdns.Browser(mdns.tcp('xbmc-jsonrpc-h'));
   browser.on('serviceUp', function(service) {
-    console.log("MDNS: service up: ", service);
+    log("MDNS: service up: ", service);
 
     var parentDevice = new XBMCDevice(service.addresses[0], 9090, service.name, self._app);
     self._devices.push(parentDevice);
 
     Object.keys(parentDevice.devices).forEach(function(id) {
-      console.log('Adding sub-device', id, parentDevice.devices[id].G);
+      log('Adding sub-device', id, parentDevice.devices[id].G);
       self.emit('register', parentDevice.devices[id]);
     });
     
   });
   browser.on('serviceDown', function(service) {
-    console.log("MDNS: service down: ", service);
+    log("MDNS: service down: ", service);
   });
   browser.start();
 
@@ -98,8 +97,6 @@ function XBMCDevice(host, port, name, app) {
   this.port = port;
   this.name = name;
   this.app = app;
-
-  console.log("GOT APP", app);
 
   this._connection = new XbmcApi.TCPConnection({
     host: host,
@@ -116,6 +113,7 @@ function XBMCDevice(host, port, name, app) {
     self.devices.hid.emit('data', 'connected');
     self.devices.camera.emit('data', 1);
     self.devices.displayText.emit('data', 1);
+    self.devices.temperature.emit('data', 'xxx');
     //self._xbmc.message('Online.', 'NinjaBlocks', 1000);// 'http://www.sydneyangels.net.au/wp-content/uploads/2012/09/ninjablocks_logo.png');
   });
 
@@ -127,9 +125,9 @@ function XBMCDevice(host, port, name, app) {
       });
     });
 
-  self._xbmc.on('connection:data', function(e) {
-    console.log('onData', e);
-  });
+  /*self._xbmc.on('connection:data', function(e) {
+    log('onData', e);
+  });*/
 
   function hid() {
     this.readable = true;
@@ -153,10 +151,31 @@ function XBMCDevice(host, port, name, app) {
 
 
   displayText.prototype.write = function(data) {
-    console.log('XBMC - received text to display', data);
+    log('XBMC - received text to display', data);
     self._xbmc.message(data);
     return true;
   };
+
+  function temperature() {
+    this.readable = true;
+    this.writeable = false;
+    this.V = 0;
+    this.D = 202;
+    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+
+    var device = this;
+
+
+    setInterval(function() {
+      self.getInfoLabels(['System.CPUTemperature'], function(data) {
+
+        var celsius = (parseFloat(data['System.CPUTemperature'].match(/[0-9\.]*/))- 32) * 5 / 9;
+        device.emit('data', celsius);
+      });
+    }, 10000);
+  }
+
+  util.inherits(temperature, stream);
 
   function camera() {
     this.writeable = true;
@@ -166,7 +185,7 @@ function XBMCDevice(host, port, name, app) {
     this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
     this._guid = [self.app.id,this.G,this.V,this.D].join('_');
 
-    console.log("Camera guid", this._guid);
+    log("Camera guid", this._guid);
     
   }
   
@@ -183,7 +202,7 @@ function XBMCDevice(host, port, name, app) {
 
     var proto = (self.app.opts.streamPort==443) ? https:http;
 
-    console.log('Requesting current playing');
+    log('Requesting current playing');
     self._xbmc.media.api.send('Player.GetActivePlayers').then(function(data) {
       if (data.result) {
         self._xbmc.media.api.send('Player.GetItem', {
@@ -192,24 +211,25 @@ function XBMCDevice(host, port, name, app) {
         }).then(function(data) {
           var thumbnail = "http://" + self.host + '/image/' + encodeURIComponent(data.result.item.thumbnail);
           
-          console.log(thumbnail);
+          log('Sending thumbnail : ' + thumbnail);
+
           var getReq = http.get(thumbnail,function(getRes) {
 
             postOptions.headers = getRes.headers;
             postOptions.headers['X-Ninja-Token'] = self.app.token;
-            console.log('token', self.app.token);
+            log('token', self.app.token);
 
             var postReq = proto.request(postOptions,function(postRes) {
 
               postRes.on('end',function() {
-                console.log('Stream Server ended');
+                log('Stream Server ended');
               });
               postRes.resume();
             });
 
             postReq.on('error',function(err) {
-              console.log('Error sending picture: ');
-              console.log(err);
+              log('Error sending picture: ');
+              log(err);
             });
 
             var lenWrote=0;
@@ -220,18 +240,18 @@ function XBMCDevice(host, port, name, app) {
 
             getRes.on('end',function() {
               postReq.end();
-              console.log("Image sent %s",lenWrote);
+              log("Image sent %s",lenWrote);
             });
             getRes.resume();
           });
           getReq.on('error',function(error) {
-            console.log(error);
+            log(error);
           });
           getReq.end();
 
         });
       } else {
-        console.log("Nothing is currently playing");
+        log("Nothing is currently playing");
       }
     });
     
@@ -241,11 +261,20 @@ function XBMCDevice(host, port, name, app) {
   this.devices = {
     hid: new hid(),
     camera: new camera(),
-    displayText: new displayText()
+    displayText: new displayText(),
+    temperature: new temperature()
   };
 
 }
 
+XBMCDevice.prototype.getInfoLabels = function(labels, cb) {
+  this._xbmc.player.api.send('XBMC.GetInfoLabels', {
+    labels: labels
+  }).then(function(data) {
+    log('xxx', data);
+    cb(data.result);
+  });
+};
 
 XBMCDevice.prototype.end = function() {};
 XBMCDevice.prototype.close = function() {};
@@ -253,15 +282,15 @@ XBMCDevice.prototype.close = function() {};
 
 var dumpEvent = function(event) {
   if (event && event.method)
-    console.log(event.method, event);
+    log(event.method, event);
 };
 
 xbmcApi.on('connection:data', function(e) {
-  console.log('onData', e);
+  log('onData', e);
 });
 
 xbmcApi.on('notification', function() {
-  console.log(111);
+  log(111);
 });
 
 xbmcApi.on('connection:open', dumpEvent);
@@ -296,6 +325,6 @@ xbmcApi.on('notification:screensaveractivated', dumpEvent);
 
 xbmcApi.on('notification:screensaverdeactivated', dumpEvent);
 
-console.log('done');*/
+log('done');*/
 
 

@@ -68,7 +68,7 @@ driver.prototype.scan = function () {
   log('MDNS: Scanning');
   var self = this;
 
-  var browser = new mdns.Browser(mdns.tcp('xbmc-jsonrpc-h'));
+  var browser = new mdns.Browser(mdns.tcp('xbmc-jsonrpc'));
   browser.on('serviceUp', function(service) {
     log("MDNS: service up: ", service);
 
@@ -209,7 +209,11 @@ function XBMCDevice(host, port, name, app) {
           playerid: data.result[0].playerid,
           properties: ['thumbnail']
         }).then(function(data) {
-          var thumbnail = "http://" + self.host + '/image/' + encodeURIComponent(data.result.item.thumbnail);
+          if (!data.result.item.thumbnail) {
+            console.warn("No thumbnail available!");
+            return;
+          }
+          var thumbnail = "http://" + self.host + ':8080/image/' + encodeURIComponent(data.result.item.thumbnail);
           
           log('Sending thumbnail : ' + thumbnail);
 
@@ -271,7 +275,7 @@ XBMCDevice.prototype.getInfoLabels = function(labels, cb) {
   this._xbmc.player.api.send('XBMC.GetInfoLabels', {
     labels: labels
   }).then(function(data) {
-    log('xxx', data);
+    //log('xxx', data);
     cb(data.result);
   });
 };

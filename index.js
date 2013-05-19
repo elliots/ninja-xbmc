@@ -1,7 +1,6 @@
 var XbmcApi = require('xbmc'),
     util = require('util'),
     stream = require('stream'),
-    mdns = require('mdns'),
     http = require('http'),
     https = require('https');
 
@@ -35,11 +34,32 @@ driver.prototype.config = function(rpc,cb) {
 
   if (!rpc) {
     return cb(null,{"contents":[
+      { "type": "submit", "name": "Add manually using IP address", "rpc_method": "addModal" },
       { "type": "submit", "name": "RickRoll All The Things!", "rpc_method": "rick-roll" }
     ]});
   }
 
   switch (rpc.method) {
+    case 'addModal':
+      cb(null, {
+        "contents":[
+          { "type": "paragraph", "text":"Please enter the IP address of the XBMC instance as well a nickname."},
+          { "type": "input_field_text", "field_name": "ip", "value": "", "label": "IP", "placeholder": "x.x.x.x", "required": true},
+          { "type": "input_field_text", "field_name": "name", "value": "XBMC", "label": "Name", "placeholder": "LoungeRoom", "required": true},
+          { "type": "paragraph", "text":"Note: You must enable the JSON-RPC interface with the xbmc setting 'Allow programs on other systems to control XBMC'"},
+          { "type": "submit", "name": "Add", "rpc_method": "add" }
+        ]
+      });
+      break;
+    case 'add':
+      self.add(rpc.params.ip, rpc.params.name);
+      cb(null, {
+        "contents": [
+          { "type":"paragraph", "text":"XBMC at http://" + rpc.params.ip + ":9090 (name : " + rpc.params.name + ") added."},
+          { "type":"close", "text":"Close"}
+        ]
+      });
+      break;
     case 'rick-roll':
       self.rickRoll();
       cb(null, {
@@ -53,7 +73,7 @@ driver.prototype.config = function(rpc,cb) {
       log('Unknown rpc method', rpc.method, rpc);
   }
 };
- 
+
 
 driver.prototype.rickRoll = function() {
   this._devices.forEach(function(device) {
@@ -62,8 +82,25 @@ driver.prototype.rickRoll = function() {
   });
 };
 
+driver.prototype.add = function(ip, name) {
+  var self = this;
+  var parentDevice = new XBMCDevice(ip, 9090, name, self._app);
+  self._devices.push(parentDevice);
+
+  Object.keys(parentDevice.devices).forEach(function(id) {
+    log('Adding sub-device', id, parentDevice.devices[id].G);
+    self.emit('register', parentDevice.devices[id]);
+  });
+};
 
 driver.prototype.scan = function () {
+  var mdns;
+  try {
+    mdns = require('mdns');
+  } catch(e) {
+    log('MDNS not available. Automatically discovery of XBMC using ZeroConf is not possible.');
+    return;
+  }
 
   log('MDNS: Scanning');
   var self = this;
@@ -72,14 +109,8 @@ driver.prototype.scan = function () {
   browser.on('serviceUp', function(service) {
     log("MDNS: service up: ", service);
 
-    var parentDevice = new XBMCDevice(service.addresses[0], 9090, service.name, self._app);
-    self._devices.push(parentDevice);
+    self.add(service.addresses[0], service.name);
 
-    Object.keys(parentDevice.devices).forEach(function(id) {
-      log('Adding sub-device', id, parentDevice.devices[id].G);
-      self.emit('register', parentDevice.devices[id]);
-    });
-    
   });
   browser.on('serviceDown', function(service) {
     log("MDNS: service down: ", service);
@@ -95,7 +126,7 @@ function XBMCDevice(host, port, name, app) {
 
   this.host = host;
   this.port = port;
-  this.name = name;
+  this.name = name && name.length > 0? name : host;
   this.app = app;
 
   this._connection = new XbmcApi.TCPConnection({
@@ -119,7 +150,7 @@ function XBMCDevice(host, port, name, app) {
 
   'play,pause,add,update.clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated'
     .split(',').forEach(  function listenToNotification(name) {
-      
+
       self._xbmc.on('notification:'+name, function(e) {
         self.devices.hid.emit('data', name);
       });
@@ -134,7 +165,7 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = false;
     this.V = 0;
     this.D = 14;
-    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
   }
 
   util.inherits(hid, stream);
@@ -144,7 +175,7 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = true;
     this.V = 0;
     this.D = 240;
-    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
   }
 
   util.inherits(displayText, stream);
@@ -161,7 +192,7 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = false;
     this.V = 0;
     this.D = 202;
-    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
 
     var device = this;
 
@@ -186,9 +217,9 @@ function XBMCDevice(host, port, name, app) {
     this._guid = [self.app.id,this.G,this.V,this.D].join('_');
 
     log("Camera guid", this._guid);
-    
+
   }
-  
+
   util.inherits(camera, stream);
 
   camera.prototype.write = function(data) {
@@ -204,7 +235,7 @@ function XBMCDevice(host, port, name, app) {
 
     log('Requesting current playing');
     self._xbmc.media.api.send('Player.GetActivePlayers').then(function(data) {
-      if (data.result) {
+      if (data.result && data.result.length) {
         self._xbmc.media.api.send('Player.GetItem', {
           playerid: data.result[0].playerid,
           properties: ['thumbnail']
@@ -214,7 +245,7 @@ function XBMCDevice(host, port, name, app) {
             return;
           }
           var thumbnail = "http://" + self.host + ':8080/image/' + encodeURIComponent(data.result.item.thumbnail);
-          
+
           log('Sending thumbnail : ' + thumbnail);
 
           var getReq = http.get(thumbnail,function(getRes) {
@@ -258,10 +289,10 @@ function XBMCDevice(host, port, name, app) {
         log("Nothing is currently playing");
       }
     });
-    
+
     return true;
   };
-  
+
   this.devices = {
     hid: new hid(),
     camera: new camera(),

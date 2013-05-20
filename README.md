@@ -32,7 +32,7 @@ v0.0.1
 
 The MDNS (ZeroConf) dependency is now optional (hooray for the probably one Windows user!) and you can now add XBMC instances manually by IP (and give them a nickname, which should help if you have more than one). 
 
-https://dl.dropboxusercontent.com/u/428557/Screen Shot 2013-05-19 at 10.52.05.png
+https://dl.dropboxusercontent.com/u/428557/Screen%20Shot%202013-05-19%20at%2010.52.05.png
 
 Drivers cannot (yet) set the device name when registering, so the nickname is only used in the guid. @dan has promised to see if he can make it happen "soon" though =)
 

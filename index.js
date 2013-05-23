@@ -162,13 +162,17 @@ function XBMCDevice(host, port, name, app) {
 
   function hid() {
     this.readable = true;
-    this.writeable = false;
+    this.writeable = true;
     this.V = 0;
     this.D = 14;
     this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
   }
 
   util.inherits(hid, stream);
+
+  hid.prototype.write = function(data) {
+      self._xbmc.input.ExecuteAction(data);
+  };
 
   function displayText() {
     this.readable = true;

@@ -1,6 +1,6 @@
 {
   "name": "ninja-xbmc",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Ninja Blocks module for interacting with XBMC",
   "main": "index.js",
   "scripts": {

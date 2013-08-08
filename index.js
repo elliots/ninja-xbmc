@@ -16,15 +16,17 @@ function driver(opts, app) {
 
   this._app = app;
   this._opts = opts;
-  this._opts.sockets = opts.sockets || [];
+  this._opts.xbmc = opts.xbmc || {};
 
   this._devices = [];
 
-  var self = this;
-
   app.on('client::up',function(){
-      self.scan();
-  });
+    for (var ip in opts.xbmc) {
+      this.add(ip, opts.xbmc[ip]);
+    }
+
+    this.scan();
+  }.bind(this));
 
 }
 
@@ -52,6 +54,8 @@ driver.prototype.config = function(rpc,cb) {
       });
       break;
     case 'add':
+      self._opts.xbmc[rpc.params.ip] = rpc.params.name;
+      self.save();
       self.add(rpc.params.ip, rpc.params.name);
       cb(null, {
         "contents": [
@@ -83,6 +87,8 @@ driver.prototype.rickRoll = function() {
 };
 
 driver.prototype.add = function(ip, name) {
+
+  this._app.log.info('Xbmc: Adding:' + name + ' (' + ip + ')');
   var self = this;
   var parentDevice = new XBMCDevice(ip, 9090, name, self._app);
   self._devices.push(parentDevice);
@@ -109,7 +115,9 @@ driver.prototype.scan = function () {
   browser.on('serviceUp', function(service) {
     log("MDNS: service up: ", service);
 
-    self.add(service.addresses[0], service.name);
+    if (!self._opts.xbmc[service.addresses[0]]) {
+      self.add(service.addresses[0], service.name);
+    }
 
   });
   browser.on('serviceDown', function(service) {
@@ -142,10 +150,16 @@ function XBMCDevice(host, port, name, app) {
   var self = this;
   this._xbmc.on('connection:open', function() {
     self.devices.hid.emit('data', 'connected');
-    self.devices.camera.emit('data', 1);
-    self.devices.displayText.emit('data', 1);
-    self.devices.temperature.emit('data', 'xxx');
+    //self.devices.camera.emit('data', 1);
+    //self.devices.displayText.emit('data', 1);
+    //self.devices.temperature.emit('data', 'xxx');
     //self._xbmc.message('Online.', 'NinjaBlocks', 1000);// 'http://www.sydneyangels.net.au/wp-content/uploads/2012/09/ninjablocks_logo.png');
+  });
+
+
+  this._xbmc.on('connection:close', function() {
+    //log('Xbmc connection closed. Reconnecting in 10 seconds');
+    setTimeout(self._connection.create.bind(self), 10000);
   });
 
   'play,pause,add,update.clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated'
@@ -156,9 +170,9 @@ function XBMCDevice(host, port, name, app) {
       });
     });
 
-  /*self._xbmc.on('connection:data', function(e) {
+  self._xbmc.on('connection:data', function(e) {
     log('onData', e);
-  });*/
+  });
 
   function hid() {
     this.readable = true;

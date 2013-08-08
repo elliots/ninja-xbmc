@@ -34,11 +34,20 @@ ninja_install -g git@github.com:elliots/ninja-xbmc.git (Requires ninja toolbelt)
 
 For MDNS (auto-discovery) you'll need to do `apt-get install libavahi-compat-libdnssd-dev`
 
+####On Mac
+
+Should "Just work".
+
 ####On Windows
 
 See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
+
+v0.0.3
+
+Manually added instances are now saved between restarts.
+Automatically reconnects if the connection goes down.
 
 v0.0.2
 

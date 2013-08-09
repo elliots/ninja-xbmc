@@ -1,7 +1,7 @@
 {
   "name": "ninja-xbmc",
   "version": "0.0.3",
-  "description": "Ninja Blocks module for interacting with XBMC",
+  "description": "NinjaBlocks XBMC driver (Mac, Linux, Windows)",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

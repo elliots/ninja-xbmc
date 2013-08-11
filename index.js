@@ -18,11 +18,16 @@ function driver(opts, app) {
   this._opts = opts;
   this._opts.xbmc = opts.xbmc || {};
 
-  this._devices = [];
+  this._devices = {};
+
+  var initialised = false;
 
   app.on('client::up',function(){
-    for (var ip in opts.xbmc) {
-      this.add(ip, opts.xbmc[ip]);
+    if (!initialised) {
+      initialised = true;
+      for (var ip in opts.xbmc) {
+        this.add(ip, opts.xbmc[ip]);
+      }
     }
 
     this.scan();
@@ -80,18 +85,23 @@ driver.prototype.config = function(rpc,cb) {
 
 
 driver.prototype.rickRoll = function() {
-  this._devices.forEach(function(device) {
+  for (ip in this._devices) {
+    var device = this._devices[ip];
     log('rickrolling', device.G);
     device._xbmc.player.openYoutube('y2Y7xqAlUHk');
-  });
+  }
 };
 
 driver.prototype.add = function(ip, name) {
 
+  if (this._devices[ip]) {
+    return;
+  }
+
   this._app.log.info('Xbmc: Adding:' + name + ' (' + ip + ')');
   var self = this;
   var parentDevice = new XBMCDevice(ip, 9090, name, self._app);
-  self._devices.push(parentDevice);
+  self._devices[ip] = parentDevice;
 
   Object.keys(parentDevice.devices).forEach(function(id) {
     log('Adding sub-device', id, parentDevice.devices[id].G);
@@ -115,7 +125,7 @@ driver.prototype.scan = function () {
   browser.on('serviceUp', function(service) {
     log("MDNS: service up: ", service);
 
-    if (!self._opts.xbmc[service.addresses[0]]) {
+    if (!self._devices[service.addresses[0]]) {
       self.add(service.addresses[0], service.name);
     }
 

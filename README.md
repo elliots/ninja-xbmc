@@ -44,6 +44,10 @@ See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
 
+v0.0.4
+
+The driver will never create more than one device for the same xbmc instance now. :/
+
 v0.0.3
 
 Manually added instances are now saved between restarts.

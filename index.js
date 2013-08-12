@@ -229,7 +229,7 @@ function XBMCDevice(host, port, name, app) {
       self.getInfoLabels(['System.CPUTemperature'], function(data) {
 
         var celsius = (parseFloat(data['System.CPUTemperature'].match(/[0-9\.]*/))- 32) * 5 / 9;
-        device.emit('data', celsius);
+        device.emit('data', celsius.toFixed(1));
       });
     }, 10000);
   }

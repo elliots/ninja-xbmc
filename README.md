@@ -44,6 +44,10 @@ See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
 
+v0.0.5
+
+Round the CPU temperature to one decimal place.
+
 v0.0.4
 
 The driver will never create more than one device for the same xbmc instance now. :/

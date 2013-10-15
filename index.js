@@ -88,7 +88,7 @@ driver.prototype.rickRoll = function() {
   for (ip in this._devices) {
     var device = this._devices[ip];
     log('rickrolling', device.G);
-    device._xbmc.player.openYoutube('y2Y7xqAlUHk');
+    device._xbmc.player.openYoutube('dQw4w9WgXcQ');
   }
 };
 

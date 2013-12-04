@@ -44,6 +44,10 @@ See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
 
+v0.0.6
+
+Add missing 'stop' event (and 'sleep', 'wake')
+
 v0.0.5
 
 Round the CPU temperature to one decimal place.

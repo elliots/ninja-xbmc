@@ -172,7 +172,7 @@ function XBMCDevice(host, port, name, app) {
     setTimeout(self._connection.create.bind(self), 10000);
   });
 
-  'play,pause,add,update.clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated'
+  'play,pause,stop,add,update,clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated,wake,sleep,seek'
     .split(',').forEach(  function listenToNotification(name) {
 
       self._xbmc.on('notification:'+name, function(e) {

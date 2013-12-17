@@ -213,7 +213,11 @@ function XBMCDevice(host, port, name, app) {
     log('XBMC - received text to display', data);
 
     if (typeof data == 'string') {
-      data = {message:data};
+      try {
+        data = JSON.parse(data);
+      } catch(e) {
+        data = {message:data};
+      }
     }
 
     self._xbmc.message(

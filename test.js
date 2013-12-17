@@ -22,6 +22,13 @@ d.emit = function(channel, value) {
         value.emit = function(channel, value) {
             console.log('Device.emit', channel, value);
         };
+
+        if (value.D == 240) {
+
+            setTimeout(function() {
+                value.write({"message":"Hello from ninjablocks!", "title": "Test message!"});
+            }, 2000);
+        }
     }
 };
 

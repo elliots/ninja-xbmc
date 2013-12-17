@@ -211,7 +211,18 @@ function XBMCDevice(host, port, name, app) {
 
   displayText.prototype.write = function(data) {
     log('XBMC - received text to display', data);
-    self._xbmc.message(data);
+
+    if (typeof data == 'string') {
+      data = {message:data};
+    }
+
+    self._xbmc.message(
+      data.message, 
+      data.title || 'NinjaBlocks', 
+      data.time || 5000, 
+      data.image || 'https://s3.amazonaws.com/ksr/avatars/1816468/Ninja-Blocks-Vimeo-Logo.medium.jpg?1345467110'
+    );
+
     return true;
   };
 

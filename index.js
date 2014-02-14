@@ -97,7 +97,7 @@ driver.prototype.rickRoll = function() {
   }
 };
 
-driver.prototype.add = function(ip, name) {
+driver.prototype.add = function(ip, name, service) {
 
   if (this._devices[ip]) {
     return;
@@ -105,8 +105,12 @@ driver.prototype.add = function(ip, name) {
 
   this._app.log.info('Xbmc: Adding:' + name + ' (' + ip + ')');
   var self = this;
-  var parentDevice = new XBMCDevice(ip, 9090, name, self._app);
+  var parentDevice = new XBMCDevice(ip, (service != null && service.port) ? service.port : 9090, name, self._app);
   self._devices[ip] = parentDevice;
+
+  if ( service ) {
+    parentDevice.addAddresses( service.addresses );
+  }
 
   Object.keys(parentDevice.devices).forEach(function(id) {
     log('Adding sub-device', id, parentDevice.devices[id].G);
@@ -132,9 +136,10 @@ driver.prototype.scan = function () {
 
     var hostId = serviceToHostIdentifier(service);
     if (!self._devices[hostId]) {
-      self.add(hostId, service.name);
+      self.add(hostId, service);
     } else {
-      log("Skipping already seen XBMC instance:", hostId);
+      self._devices[hostId].addAddresses( service.addresses );
+      log("Skipping already seen XBMC instance (instead, adding as alternative host):", hostId);
     }
 
   });
@@ -155,18 +160,18 @@ function XBMCDevice(host, port, name, app) {
   this.name = name && name.length > 0? name : host;
   this.app = app;
 
-  this._connection = new XbmcApi.TCPConnection({
-    host: host,
-    port: port,
-    verbose: false
-  });
+  this._connections = [];
+
+  this.addAddresses([host]);
 
   this._xbmc = new XbmcApi.XbmcApi({silent:true});
 
-  this._xbmc.setConnection(this._connection);
+  this._nextConnection = 0;
+  this.bindNextConnection( );
 
   var self = this;
   this._xbmc.on('connection:open', function() {
+    console.log('emitting connected');
     self.devices.hid.emit('data', 'connected');
     //self.devices.camera.emit('data', 1);
     //self.devices.displayText.emit('data', 1);
@@ -177,12 +182,20 @@ function XBMCDevice(host, port, name, app) {
 
   this._xbmc.on('connection:close', function() {
     //log('Xbmc connection closed. Reconnecting in 10 seconds');
-    setTimeout(self._connection.create.bind(self), 10000);
+    var timeout = 500; // take 500ms between address attempts
+    if ( this._nextConncetion == 0 ) {
+      timeout = 10000; // take 10s between retries after disconnect
+    } else {
+      console.log('Could not connect to', self._xbmc.connection.options.host, ', retrying with next address...' );
+    }
+
+    setTimeout(self.bindNextConnection.bind(self), timeout);
   });
 
   'play,pause,stop,add,update,clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated,wake,sleep,seek'
     .split(',').forEach(  function listenToNotification(name) {
       self._xbmc.on('notification:'+name, function(e) {
+        console.log( 'NOTIFICATION!!!', name );
         self.devices.hid.emit('data', name);
       });
     });
@@ -351,6 +364,27 @@ function XBMCDevice(host, port, name, app) {
   };
 
 }
+
+XBMCDevice.prototype.addAddresses = function(addresses) {
+  var self = this;
+
+  addresses.forEach(function(address){
+    self._connections.push( new XbmcApi.TCPConnection({
+      host: address,
+      port: self.port,
+      verbose: false,
+      connectNow: false
+    }) );
+  });
+};
+
+XBMCDevice.prototype.bindNextConnection = function () {
+  var conn = this._nextConnection;
+  this._nextConnection = (this._nextConnection+1) % this._connections.length;
+
+  this._connections[conn].create();
+  this._xbmc.setConnection(this._connections[conn]);
+};
 
 XBMCDevice.prototype.getInfoLabels = function(labels, cb) {
   this._xbmc.player.api.send('XBMC.GetInfoLabels', {

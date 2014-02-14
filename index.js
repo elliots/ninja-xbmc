@@ -12,6 +12,11 @@ util.inherits(driver,stream);
 util.inherits(XBMCDevice,stream);
 
 
+function serviceToHostIdentifier(service) {
+  return service.name.replace(/[^a-zA-Z0-9]/g, '') + service.port;
+}
+
+
 function driver(opts, app) {
 
   this._app = app;
@@ -125,8 +130,11 @@ driver.prototype.scan = function () {
   browser.on('serviceUp', function(service) {
     log("MDNS: service up: ", service);
 
-    if (!self._devices[service.addresses[0]]) {
-      self.add(service.addresses[0], service.name);
+    var hostId = serviceToHostIdentifier(service);
+    if (!self._devices[hostId]) {
+      self.add(hostId, service.name);
+    } else {
+      log("Skipping already seen XBMC instance:", hostId);
     }
 
   });
@@ -174,7 +182,6 @@ function XBMCDevice(host, port, name, app) {
 
   'play,pause,stop,add,update,clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated,wake,sleep,seek'
     .split(',').forEach(  function listenToNotification(name) {
-
       self._xbmc.on('notification:'+name, function(e) {
         self.devices.hid.emit('data', name);
       });
@@ -189,13 +196,13 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = true;
     this.V = 0;
     this.D = 14;
-    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = serviceToHostIdentifier(self);
   }
 
   util.inherits(hid, stream);
 
   hid.prototype.write = function(data) {
-      self._xbmc.input.ExecuteAction(data);
+    self._xbmc.input.ExecuteAction(data);
   };
 
   function displayText() {
@@ -203,7 +210,7 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = true;
     this.V = 0;
     this.D = 240;
-    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = serviceToHostIdentifier(self);
   }
 
   util.inherits(displayText, stream);
@@ -235,7 +242,7 @@ function XBMCDevice(host, port, name, app) {
     this.writeable = false;
     this.V = 0;
     this.D = 202;
-    this.G = self.name.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = serviceToHostIdentifier(self);
 
     var device = this;
 
@@ -256,7 +263,7 @@ function XBMCDevice(host, port, name, app) {
     this.readable = true;
     this.V = 0;
     this.D = 1004;
-    this.G = self.host.replace(/[^a-zA-Z0-9]/g, '') + self.port;
+    this.G = serviceToHostIdentifier(self);
     this._guid = [self.app.id,this.G,this.V,this.D].join('_');
 
     log("Camera guid", this._guid);

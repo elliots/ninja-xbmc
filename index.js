@@ -183,7 +183,7 @@ function XBMCDevice(host, port, name, app) {
   this._xbmc.on('connection:close', function() {
     //log('Xbmc connection closed. Reconnecting in 10 seconds');
     var timeout = 500; // take 500ms between address attempts
-    if ( this._nextConncetion == 0 ) {
+    if ( this._nextConnection == 0 ) {
       timeout = 10000; // take 10s between retries after disconnect
     } else {
       console.log('Could not connect to', self._xbmc.connection.options.host, ', retrying with next address...' );

@@ -44,6 +44,10 @@ See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
 
+v0.0.8
+
+A small bug in the scanning logic. :/
+
 v0.0.7
 
 Allow extra properties to be set on notifications ('time', 'image' and 'title')

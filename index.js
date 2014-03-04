@@ -136,7 +136,7 @@ driver.prototype.scan = function () {
 
     var hostId = serviceToHostIdentifier(service);
     if (!self._devices[hostId]) {
-      self.add(hostId, service);
+      self.add(hostId, service.name, service);
     } else {
       self._devices[hostId].addAddresses( service.addresses );
       log("Skipping already seen XBMC instance (instead, adding as alternative host):", hostId);

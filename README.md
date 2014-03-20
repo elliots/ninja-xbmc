@@ -44,6 +44,10 @@ See: https://github.com/agnat/node_mdns/blob/master/README.textile
 
 ###History
 
+v0.0.9
+
+Slow down host connection retries. A few small logging improvements for EC.
+
 v0.0.8
 
 A small bug in the scanning logic. :/

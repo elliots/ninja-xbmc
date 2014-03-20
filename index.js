@@ -6,8 +6,6 @@ var XbmcApi = require('xbmc'),
 
 // ES: This code is horrid. Please fix it.
 
-var log = console.log;
-
 util.inherits(driver,stream);
 util.inherits(XBMCDevice,stream);
 
@@ -84,7 +82,7 @@ driver.prototype.config = function(rpc,cb) {
       });
       break;
     default:
-      log('Unknown rpc method', rpc.method, rpc);
+      self.log.warn('Unknown rpc method', rpc.method, rpc);
   }
 };
 
@@ -92,7 +90,7 @@ driver.prototype.config = function(rpc,cb) {
 driver.prototype.rickRoll = function() {
   for (ip in this._devices) {
     var device = this._devices[ip];
-    log('rickrolling', device.G);
+    this.log.info('rickrolling', device.G);
     device._xbmc.player.openYoutube('dQw4w9WgXcQ');
   }
 };
@@ -103,9 +101,9 @@ driver.prototype.add = function(ip, name, service) {
     return;
   }
 
-  this._app.log.info('Xbmc: Adding:' + name + ' (' + ip + ')');
+  this.log.info('Xbmc: Adding:' + name + ' (' + ip + ')');
   var self = this;
-  var parentDevice = new XBMCDevice(ip, (service != null && service.port) ? service.port : 9090, name, self._app);
+  var parentDevice = new XBMCDevice(ip, (service != null && service.port) ? service.port : 9090, name, self._app, self);
   self._devices[ip] = parentDevice;
 
   if ( service ) {
@@ -113,7 +111,7 @@ driver.prototype.add = function(ip, name, service) {
   }
 
   Object.keys(parentDevice.devices).forEach(function(id) {
-    log('Adding sub-device', id, parentDevice.devices[id].G);
+    self.log.debug('Adding sub-device', id, parentDevice.devices[id].G);
     self.emit('register', parentDevice.devices[id]);
   });
 };
@@ -123,28 +121,28 @@ driver.prototype.scan = function () {
   try {
     mdns = require('mdns');
   } catch(e) {
-    log('MDNS not available. Automatically discovery of XBMC using ZeroConf is not possible.');
+    this.log.warn('MDNS not available. Automatically discovery of XBMC using ZeroConf is not possible.');
     return;
   }
 
-  log('MDNS: Scanning');
+  this.log.debug('MDNS: Scanning');
   var self = this;
 
   var browser = new mdns.Browser(mdns.tcp('xbmc-jsonrpc'));
   browser.on('serviceUp', function(service) {
-    log("MDNS: service up: ", service);
+    self.log.info("MDNS: service up: ", service);
 
     var hostId = serviceToHostIdentifier(service);
     if (!self._devices[hostId]) {
       self.add(hostId, service.name, service);
     } else {
       self._devices[hostId].addAddresses( service.addresses );
-      log("Skipping already seen XBMC instance (instead, adding as alternative host):", hostId);
+      self.log.debug("Skipping already seen XBMC instance (instead, adding as alternative host):", hostId);
     }
 
   });
   browser.on('serviceDown', function(service) {
-    log("MDNS: service down: ", service);
+    this.log.info("MDNS: service down: ", service);
   });
   browser.start();
 
@@ -153,12 +151,14 @@ driver.prototype.scan = function () {
 module.exports = driver;
 
 
-function XBMCDevice(host, port, name, app) {
+function XBMCDevice(host, port, name, app, driver) {
 
   this.host = host;
   this.port = port;
   this.name = name && name.length > 0? name : host;
   this.app = app;
+
+  this.log = driver.log.extend? driver.log.extend(name) : driver.log;
 
   this._connections = [];
 
@@ -171,7 +171,6 @@ function XBMCDevice(host, port, name, app) {
 
   var self = this;
   this._xbmc.on('connection:open', function() {
-    console.log('emitting connected');
     self.devices.hid.emit('data', 'connected');
     //self.devices.camera.emit('data', 1);
     //self.devices.displayText.emit('data', 1);
@@ -182,11 +181,11 @@ function XBMCDevice(host, port, name, app) {
 
   this._xbmc.on('connection:close', function() {
     //log('Xbmc connection closed. Reconnecting in 10 seconds');
-    var timeout = 500; // take 500ms between address attempts
+    var timeout = 2000; // take 500ms between address attempts
     if ( this._nextConnection == 0 ) {
       timeout = 10000; // take 10s between retries after disconnect
     } else {
-      console.log('Could not connect to', self._xbmc.connection.options.host, ', retrying with next address...' );
+      self.log.info('Could not connect to', self._xbmc.connection.options.host, ', retrying with next address...' );
     }
 
     setTimeout(self.bindNextConnection.bind(self), timeout);
@@ -195,13 +194,13 @@ function XBMCDevice(host, port, name, app) {
   'play,pause,stop,add,update,clear,scanstarted,scanfinished,screensaveractivated,screensaverdeactivated,wake,sleep,seek'
     .split(',').forEach(  function listenToNotification(name) {
       self._xbmc.on('notification:'+name, function(e) {
-        console.log( 'NOTIFICATION!!!', name );
+        self.log.debug( 'Notification', name );
         self.devices.hid.emit('data', name);
       });
     });
 
   self._xbmc.on('connection:data', function(e) {
-    log('onData', e);
+    self.log.debug('onData', e);
   });
 
   function hid() {
@@ -230,7 +229,7 @@ function XBMCDevice(host, port, name, app) {
 
 
   displayText.prototype.write = function(data) {
-    log('XBMC - received text to display', data);
+    self.log.info('Received text to display', data);
 
     if (typeof data == 'string') {
       try {
@@ -279,7 +278,7 @@ function XBMCDevice(host, port, name, app) {
     this.G = serviceToHostIdentifier(self);
     this._guid = [self.app.id,this.G,this.V,this.D].join('_');
 
-    log("Camera guid", this._guid);
+    self.log.debug("Camera guid", this._guid);
 
   }
 
@@ -296,7 +295,7 @@ function XBMCDevice(host, port, name, app) {
 
     var proto = (self.app.opts.streamPort==443) ? https:http;
 
-    log('Requesting current playing');
+    self.log.debug('Requesting current playing');
     self._xbmc.media.api.send('Player.GetActivePlayers').then(function(data) {
       if (data.result && data.result.length) {
         self._xbmc.media.api.send('Player.GetItem', {
@@ -309,25 +308,25 @@ function XBMCDevice(host, port, name, app) {
           }
           var thumbnail = "http://" + self.host + ':8080/image/' + encodeURIComponent(data.result.item.thumbnail);
 
-          log('Sending thumbnail : ' + thumbnail);
+          self.log.debug('Sending thumbnail : ' + thumbnail);
 
           var getReq = http.get(thumbnail,function(getRes) {
 
             postOptions.headers = getRes.headers;
             postOptions.headers['X-Ninja-Token'] = self.app.token;
-            log('token', self.app.token);
+            self.log.debug('token', self.app.token);
 
             var postReq = proto.request(postOptions,function(postRes) {
 
               postRes.on('end',function() {
-                log('Stream Server ended');
+                self.log.debug('Stream Server ended');
               });
               postRes.resume();
             });
 
             postReq.on('error',function(err) {
-              log('Error sending picture: ');
-              log(err);
+              self.log.error('Error sending picture: ');
+              self.log.error(err);
             });
 
             var lenWrote=0;
@@ -338,18 +337,18 @@ function XBMCDevice(host, port, name, app) {
 
             getRes.on('end',function() {
               postReq.end();
-              log("Image sent %s",lenWrote);
+              self.log.debug("Image sent %s",lenWrote);
             });
             getRes.resume();
           });
           getReq.on('error',function(error) {
-            log(error);
+            self.log.debug(error);
           });
           getReq.end();
 
         });
       } else {
-        log("Nothing is currently playing");
+        self.log.debug("Nothing is currently playing");
       }
     });
 

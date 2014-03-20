@@ -1,6 +1,6 @@
 {
   "name": "ninja-xbmc",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "NinjaBlocks XBMC driver (Mac, Linux, Windows)",
   "main": "index.js",
   "scripts": {

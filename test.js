@@ -1,10 +1,10 @@
 var opts = {
     xbmc: {
-        '192.168.1.1' : 'Elliot\'s Media Player'
+ 
     }
 };
 
-var d = new (require('index'))(opts, {
+var d = new (require('./index'))(opts, {
     on : function(x,cb){
         setTimeout(cb, 100);
     },

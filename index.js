@@ -143,7 +143,7 @@ driver.prototype.scan = function () {
   });
   browser.on('serviceDown', function(service) {
     this.log.info("MDNS: service down: ", service);
-  });
+  }.bind(this));
   browser.start();
 
 };
